@@ -1,0 +1,7 @@
+/dist/
+*.exe
+*.zip
+*.log
+config.json
+state.json
+/testdata/local/
