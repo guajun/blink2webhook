@@ -248,6 +248,10 @@ func diagnose(strict bool) error {
 		}
 		fmt.Println("签名校验：不发送签名；请在机器人端关闭签名校验")
 		fmt.Println("监测进程：", strings.Join(c.Apps, ", "))
+		if err := printProcessMatches(c.Apps); err != nil {
+			fmt.Println("闪烁监测进程查询失败：", err)
+			healthy = false
+		}
 	}
 	cmd := autostartCommand()
 	if cmd == "" {

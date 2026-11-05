@@ -2,6 +2,8 @@
 
 把 Windows QQNT / 微信的任务栏闪烁，转成飞书 / Lark 群机器人消息。只通知“应用请求注意”，不读取聊天内容、不截图、不注入进程。
 
+**让电脑的提醒，抵达飞书 / Lark。** 在工位直接通过飞书 / Lark 查看家里电脑的提醒，不用拿起手机、在工位登录 QQ / 微信，也不用一直挂着远程桌面。飞书 / Lark 的电脑端和手机端均可接收。
+
 **[中文主页与安装教程](https://guajun.github.io/flash-notify/) · [下载 Release](https://github.com/guajun/flash-notify/releases/latest)**
 
 ## 一行安装
@@ -40,14 +42,16 @@ Webhook 是发送凭据，请仅保存在本机。配置文件保存明文 URL�
 | `flash-notify config show` | 查看脱敏配置 |
 | `flash-notify test` | 发一条真实测试消息 |
 | `flash-notify status` | 查看 daemon、自启、最近捕获和投递情况 |
-| `flash-notify doctor` | 诊断配置、会话、自启路径、daemon 和捕获就绪情况；异常返回非零 |
+| `flash-notify doctor` | 诊断配置、会话、自启路径、daemon、捕获就绪及监测进程匹配；异常返回非零 |
 | `flash-notify version` | 查看版本 |
 
 自动化配置支持将 URL 从标准输入传给 `flash-notify config webhook --stdin`，不接受 URL 命令行参数，避免写入命令历史。单个用户会话运行一个 daemon，配置单个 Webhook。`FLASH_NOTIFY_HOME` 可覆盖数据目录用于开发测试，普通用户无需设置。
 
+`doctor` / `status` 会按配置的进程名列出当前桌面会话中已匹配的进程数量与 PID，并区分未匹配、只在其他会话运行和无法查询会话。QQNT 对应 `QQ.exe`，微信通常对应 `Weixin.exe` 或 `WeChat.exe`，命中其中一种即可；未启动应用是提示信息，不会单独导致诊断失败。进程匹配只能确认应用已启动，能否捕获仍需实际触发任务栏闪烁。
+
 ## 实现与限制
 
-Go 标准库实现，CGO_DISABLED，无第三方运行时依赖。隐藏顶层窗口注册 `RegisterShellHookWindow`，接收 `HSHELL_FLASH`，通过窗口所属进程匹配 `QQ.exe`、`Weixin.exe`、`WeChat.exe`，再发 HTTPS POST。后台没有窗口扫描或截图轮询。
+Go 标准库实现，`CGO_ENABLED=0`，无第三方运行时依赖。隐藏顶层窗口注册 `RegisterShellHookWindow`，接收 `HSHELL_FLASH`，通过窗口所属进程匹配 `QQ.exe`、`Weixin.exe`、`WeChat.exe`，再发 HTTPS POST。后台没有窗口扫描或截图轮询。
 
 daemon 是**用户会话后台进程**，通过 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 的 `FlashNotify` 值在登录时启动。它不是 Session 0 Windows Service：系统服务无法直接接收另一个桌面会话的窗口事件。“开机自启”实际指开机后用户登录自启；未登录、注销或休眠时不监测。
 
