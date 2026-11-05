@@ -6,6 +6,8 @@
 
 **[中文主页与安装教程](https://guajun.github.io/flash-notify/) · [下载 Release](https://github.com/guajun/flash-notify/releases/latest)**
 
+规划中的通用“窗口闪烁 → 标准事件 → Webhook”链路见 [TODO](TODO.md)。
+
 ## 一行安装
 
 在**运行 QQNT / 微信的 Windows 电脑**上，打开普通 PowerShell：
