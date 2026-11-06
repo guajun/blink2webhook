@@ -35,7 +35,7 @@ var getWindowPID = user32.NewProc("GetWindowThreadProcessId")
 
 func wide(s string) *uint16 { p, _ := syscall.UTF16PtrFromString(s); return p }
 func className() string {
-	return fmt.Sprintf("FlashNotifyDaemon-%x", sha256.Sum256([]byte(strings.ToLower(dataDir()))))
+	return fmt.Sprintf("Blink2WebhookDaemon-%x", sha256.Sum256([]byte(strings.ToLower(dataDir()))))
 }
 func daemonWindow() uintptr {
 	h, _, _ := findWindow.Call(uintptr(unsafe.Pointer(wide(className()))), 0)
@@ -102,7 +102,7 @@ func startDaemon() error {
 	if err != nil {
 		return err
 	}
-	if err = validateWebhook(c.Webhook); err != nil {
+	if err = validateOutput(c); err != nil {
 		return err
 	}
 	exe, err := os.Executable()
@@ -166,7 +166,7 @@ func restartDaemon() error {
 }
 
 const runKey = `Software\Microsoft\Windows\CurrentVersion\Run`
-const runValue = "FlashNotify"
+const runValue = "Blink2Webhook"
 
 func setAutostart(on bool) error {
 	args := []string{"delete", `HKCU\` + runKey, "/v", runValue, "/f"}
@@ -175,7 +175,7 @@ func setAutostart(on bool) error {
 		if err != nil {
 			return err
 		}
-		if err = validateWebhook(c.Webhook); err != nil {
+		if err = validateOutput(c); err != nil {
 			return err
 		}
 		exe, err := os.Executable()
@@ -242,11 +242,14 @@ func diagnose(strict bool) error {
 		fmt.Println("配置：异常：", err)
 		healthy = false
 	} else {
+		fmt.Println("输出类型：", c.Output)
 		fmt.Println("Webhook：", maskedWebhook(c.Webhook))
-		if validateWebhook(c.Webhook) != nil {
+		if validateOutput(c) != nil {
 			healthy = false
 		}
-		fmt.Println("签名校验：不发送签名；请在机器人端关闭签名校验")
+		if c.Output != "json" {
+			fmt.Println("签名校验：不发送签名；请在机器人端关闭签名校验")
+		}
 		fmt.Println("监测进程：", strings.Join(c.Apps, ", "))
 		if err := printProcessMatches(c.Apps); err != nil {
 			fmt.Println("闪烁监测进程查询失败：", err)
@@ -274,7 +277,7 @@ func diagnose(strict bool) error {
 	if err == nil {
 		b, _ := json.MarshalIndent(s, "", "  ")
 		fmt.Println("最近运行状态：\n" + string(b))
-		if daemonWindow() != 0 && s.WebhookHash != webhookHash(c.Webhook) {
+		if daemonWindow() != 0 && s.WebhookHash != outputHash(c) {
 			fmt.Println("运行配置与磁盘配置不一致：手动改文件后请执行 restart；旧版本请先更新。")
 			healthy = false
 		}

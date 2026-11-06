@@ -11,6 +11,7 @@ import (
 )
 
 type Config struct {
+	Output       string   `json:"output"`
 	Webhook      string   `json:"webhook"`
 	Device       string   `json:"device"`
 	Apps         []string `json:"apps"`
@@ -18,15 +19,15 @@ type Config struct {
 }
 
 func dataDir() string {
-	if p := os.Getenv("FLASH_NOTIFY_HOME"); p != "" {
+	if p := os.Getenv("BLINK2WEBHOOK_HOME"); p != "" {
 		return p
 	}
-	return filepath.Join(os.Getenv("LOCALAPPDATA"), "FlashNotify")
+	return filepath.Join(os.Getenv("LOCALAPPDATA"), "Blink2Webhook")
 }
 
 func defaults() Config {
 	name, _ := os.Hostname()
-	return Config{Device: name, Apps: []string{"QQ.exe", "Weixin.exe", "WeChat.exe"}, QuietSeconds: 10}
+	return Config{Output: "feishu", Device: name, Apps: []string{"QQ.exe", "Weixin.exe", "WeChat.exe"}, QuietSeconds: 10}
 }
 
 func validateWebhook(raw string) error {
@@ -73,7 +74,7 @@ func writeJSON(path string, value any) error {
 	if err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".flash-notify-*")
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".blink2webhook-*")
 	if err != nil {
 		return err
 	}
@@ -89,7 +90,7 @@ func writeJSON(path string, value any) error {
 }
 
 func saveConfig(c Config) error {
-	if err := validateWebhook(c.Webhook); err != nil {
+	if err := validateOutput(c); err != nil {
 		return err
 	}
 	if err := writeJSON(filepath.Join(dataDir(), "config.json"), c); err != nil {
@@ -102,9 +103,23 @@ func maskedWebhook(raw string) string {
 	if raw == "" {
 		return "未配置"
 	}
-	if validateWebhook(raw) != nil {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
 		return "已配置（URL 无效）"
 	}
-	u, _ := url.Parse(raw)
-	return fmt.Sprintf("https://%s/open-apis/bot/v2/hook/***", u.Host)
+	return fmt.Sprintf("%s://%s/***", u.Scheme, u.Host)
+}
+func validateOutput(c Config) error {
+	switch c.Output {
+	case "", "feishu":
+		return validateWebhook(c.Webhook)
+	case "json":
+		u, err := url.Parse(c.Webhook)
+		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Hostname() == "" || u.User != nil || u.Fragment != "" {
+			return errors.New("通用 Webhook 必须为 HTTP(S) URL，不能包含用户信息或片段")
+		}
+		return nil
+	default:
+		return errors.New("output 必须为 feishu 或 json")
+	}
 }

@@ -47,7 +47,7 @@ func runDaemon() error {
 	if err != nil {
 		return err
 	}
-	if err = validateWebhook(c.Webhook); err != nil {
+	if err = validateOutput(c); err != nil {
 		return err
 	}
 	return runCaptureReload(c, webhookClient(), loadConfig)
@@ -80,7 +80,7 @@ func runCaptureReload(c Config, client *http.Client, reload func() (Config, erro
 	}
 	defer file.Close()
 	logger := log.New(file, "", log.LstdFlags)
-	state := State{PID: os.Getpid(), Session: sessionID(), Started: time.Now(), WebhookHash: webhookHash(c.Webhook)}
+	state := State{PID: os.Getpid(), Session: sessionID(), Started: time.Now(), WebhookHash: outputHash(c)}
 	var stateMu sync.Mutex
 	update := func(change func(*State)) {
 		stateMu.Lock()
@@ -141,7 +141,7 @@ func runCaptureReload(c Config, client *http.Client, reload func() (Config, erro
 		if msg == uint32(shell) && wparam == 0x8006 {
 			if app, ok := allowed[strings.ToLower(processName(lparam))]; ok {
 				select {
-				case events <- Event{App: app, Time: time.Now()}:
+				case events <- Event{App: appLabel(app), Device: c.Device, Time: time.Now()}:
 				default:
 					logger.Print("事件队列已满，忽略一条闪烁")
 				}
@@ -203,19 +203,20 @@ func dispatch(ctx context.Context, c Config, events <-chan Event, client *http.C
 			if reload != nil {
 				latest, loadErr := reload()
 				if loadErr == nil {
-					loadErr = validateWebhook(latest.Webhook)
+					loadErr = validateOutput(latest)
 				}
 				if loadErr != nil {
 					logger.Print("配置更新失败，保留原运行配置；请修复后重新执行 config 或 restart")
 					update(func(s *State) { s.LastError = "读取最新 Webhook 配置失败" })
 					continue
 				}
-				if latest.Webhook != c.Webhook {
+				if latest.Webhook != c.Webhook || latest.Output != c.Output {
 					c.Webhook = latest.Webhook
+					c.Output = latest.Output
 					d.Last = map[string]time.Time{}
 					logger.Print("已应用新的 Webhook 配置")
 				}
-				update(func(s *State) { s.WebhookHash = webhookHash(c.Webhook); s.LastError = "" })
+				update(func(s *State) { s.WebhookHash = outputHash(c); s.LastError = "" })
 			}
 		case e := <-events:
 			update(func(s *State) { s.Captured++; s.LastCapture = &e })
@@ -225,7 +226,7 @@ func dispatch(ctx context.Context, c Config, events <-chan Event, client *http.C
 			logger.Printf("捕获提醒 app=%s", e.App)
 			var err error
 			for attempt := 0; attempt < 3; attempt++ {
-				err = sendText(ctx, client, c.Webhook, eventText(c, e))
+				err = sendEvent(ctx, client, c, e)
 				if err == nil {
 					break
 				}

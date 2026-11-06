@@ -30,6 +30,10 @@ func sendText(ctx context.Context, client *http.Client, endpoint, text string) e
 		} `json:"content"`
 	}{Type: "text"}
 	payload.Content.Text = text
+	return postPayload(ctx, client, endpoint, payload, false)
+}
+
+func postPayload(ctx context.Context, client *http.Client, endpoint string, payload any, generic bool) error {
 	b, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(b))
 	if err != nil {
@@ -38,10 +42,13 @@ func sendText(ctx context.Context, client *http.Client, endpoint, text string) e
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 	res, err := client.Do(req)
 	if err != nil {
-		return &DeliveryError{"HTTPS 请求未完成（请检查网络、代理和证书；请求可能已被接收）", true}
+		return &DeliveryError{"HTTP 请求未完成（请检查网络、代理和证书；请求可能已被接收）", true}
 	}
 	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
+	if generic && res.StatusCode >= 200 && res.StatusCode < 300 {
+		return nil
+	}
+	if res.StatusCode != http.StatusOK || generic {
 		return &DeliveryError{fmt.Sprintf("Webhook HTTP 状态 %d", res.StatusCode), res.StatusCode == 429 || res.StatusCode >= 500}
 	}
 	var result struct {
@@ -65,8 +72,9 @@ func sendText(ctx context.Context, client *http.Client, endpoint, text string) e
 }
 
 type Event struct {
-	App  string
-	Time time.Time
+	App    string    `json:"app"`
+	Device string    `json:"device"`
+	Time   time.Time `json:"time"`
 }
 type Debouncer struct {
 	Last  map[string]time.Time
@@ -90,5 +98,12 @@ func appLabel(process string) string {
 }
 
 func eventText(c Config, e Event) string {
-	return fmt.Sprintf("【%s】请求注意\n设备：%s\n%s · 电脑闪烁提醒", appLabel(e.App), c.Device, e.Time.Format("2006-01-02 15:04:05"))
+	return fmt.Sprintf("【%s】请求注意\n设备：%s\n%s · 电脑闪烁提醒", appLabel(e.App), e.Device, e.Time.Format("2006-01-02 15:04:05"))
+}
+
+func sendEvent(ctx context.Context, client *http.Client, c Config, e Event) error {
+	if c.Output == "json" {
+		return postPayload(ctx, client, c.Webhook, e, true)
+	}
+	return sendText(ctx, client, c.Webhook, eventText(c, e))
 }

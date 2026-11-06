@@ -33,7 +33,7 @@ func notifyConfigReload(c Config) error {
 	}
 	for i := 0; i < 100; i++ {
 		s, _ := readState()
-		if s.CaptureReady && s.WebhookHash == webhookHash(c.Webhook) {
+		if s.CaptureReady && s.WebhookHash == outputHash(c) {
 			fmt.Println("daemon 已应用新 Webhook，无需重启。")
 			return nil
 		}
@@ -41,3 +41,5 @@ func notifyConfigReload(c Config) error {
 	}
 	return errors.New("配置已保存并通知 daemon，但尚未确认生效；可能正在投递，请稍后运行 doctor")
 }
+
+func outputHash(c Config) string { return webhookHash(c.Output + "\x00" + c.Webhook) }

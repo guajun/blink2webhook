@@ -21,7 +21,7 @@ func TestShellFlashIntegration(t *testing.T) {
 	if sessionID() == 0 || shell == 0 {
 		t.Skip("requires an interactive Windows desktop")
 	}
-	t.Setenv("FLASH_NOTIFY_HOME", t.TempDir())
+	t.Setenv("BLINK2WEBHOOK_HOME", t.TempDir())
 	received := make(chan bool, 8)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { received <- true; w.Write([]byte(`{"code":0}`)) }))
 	defer server.Close()
@@ -63,14 +63,14 @@ func TestShellFlashIntegration(t *testing.T) {
 		r, _, _ := defWindowProc.Call(h, uintptr(m), w, l)
 		return r
 	})
-	cls := windowClass{Proc: callback, Instance: instance, Name: wide("FlashNotifyIntegrationWindow")}
+	cls := windowClass{Proc: callback, Instance: instance, Name: wide("Blink2WebhookIntegrationWindow")}
 	cls.Size = uint32(unsafe.Sizeof(cls))
 	atom, _, _ := registerClass.Call(uintptr(unsafe.Pointer(&cls)))
 	if atom == 0 {
 		t.Fatal("register test window")
 	}
 	defer user32.NewProc("UnregisterClassW").Call(uintptr(unsafe.Pointer(cls.Name)), instance)
-	hwnd, _, _ := createWindow.Call(0x08040000, uintptr(unsafe.Pointer(cls.Name)), uintptr(unsafe.Pointer(wide("Flash Notify capture test"))), 0x00CF0000, 0, 0, 240, 120, 0, 0, instance, 0)
+	hwnd, _, _ := createWindow.Call(0x08040000, uintptr(unsafe.Pointer(cls.Name)), uintptr(unsafe.Pointer(wide("blink2webhook capture test"))), 0x00CF0000, 0, 0, 240, 120, 0, 0, instance, 0)
 	if hwnd == 0 {
 		t.Fatal("create test window")
 	}

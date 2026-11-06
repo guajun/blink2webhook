@@ -19,7 +19,7 @@ type transportFunc func(*http.Request) (*http.Response, error)
 func (f transportFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 func TestRunningDispatcherSwitchesWebhookWithoutRestart(t *testing.T) {
-	t.Setenv("FLASH_NOTIFY_HOME", t.TempDir())
+	t.Setenv("BLINK2WEBHOOK_HOME", t.TempDir())
 	c := defaults()
 	c.Webhook = "https://open.feishu.cn/open-apis/bot/v2/hook/old"
 	if err := saveConfig(c); err != nil {
@@ -73,11 +73,26 @@ func TestRunningDispatcherSwitchesWebhookWithoutRestart(t *testing.T) {
 	requests <- struct{}{}
 	select {
 	case hash := <-applied:
-		if hash != webhookHash(c.Webhook) {
+		if hash != outputHash(c) {
 			t.Fatal("wrong configuration applied")
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("reload not applied")
+	}
+	emit()
+	expect(c.Webhook)
+	c.Output = "json"
+	if err := saveConfig(c); err != nil {
+		t.Fatal(err)
+	}
+	requests <- struct{}{}
+	select {
+	case hash := <-applied:
+		if hash != outputHash(c) {
+			t.Fatal("output not applied")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("output reload timeout")
 	}
 	emit()
 	expect(c.Webhook)

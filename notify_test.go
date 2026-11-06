@@ -125,7 +125,7 @@ func TestWebhookValidationAndRedaction(t *testing.T) {
 }
 
 func TestConfigReplacement(t *testing.T) {
-	t.Setenv("FLASH_NOTIFY_HOME", t.TempDir())
+	t.Setenv("BLINK2WEBHOOK_HOME", t.TempDir())
 	c := defaults()
 	c.Webhook = "https://open.feishu.cn/open-apis/bot/v2/hook/first"
 	if err := saveConfig(c); err != nil {
@@ -138,5 +138,75 @@ func TestConfigReplacement(t *testing.T) {
 	read, err := loadConfig()
 	if err != nil || read.Webhook != c.Webhook {
 		t.Fatalf("replacement failed: %v", err)
+	}
+}
+
+func TestGenericWebhook(t *testing.T) {
+	event := Event{App: "微信", Device: "home-pc", Time: time.Date(2026, 11, 6, 12, 0, 0, 0, time.FixedZone("CST", 8*3600))}
+	for _, status := range []int{200, 201, 204, 302, 400, 429, 503} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != "POST" || !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+					t.Error("invalid request")
+				}
+				var got Event
+				if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+					t.Error(err)
+				}
+				if got.App != event.App || got.Device != event.Device || !got.Time.Equal(event.Time) {
+					t.Errorf("wrong event: %+v", got)
+				}
+				w.WriteHeader(status)
+			}))
+			defer server.Close()
+			c := defaults()
+			c.Output = "json"
+			c.Webhook = server.URL
+			if err := validateOutput(c); err != nil {
+				t.Fatal(err)
+			}
+			err := sendEvent(context.Background(), webhookClient(), c, event)
+			if (err == nil) != (status >= 200 && status < 300) {
+				t.Fatalf("status %d: %v", status, err)
+			}
+			if err != nil {
+				d, ok := err.(*DeliveryError)
+				if !ok || d.Retry != (status == 429 || status >= 500) {
+					t.Fatalf("wrong retry: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestOutputConfigCompatibility(t *testing.T) {
+	t.Setenv("BLINK2WEBHOOK_HOME", t.TempDir())
+	c := defaults()
+	c.Output = ""
+	c.Webhook = "https://open.feishu.cn/open-apis/bot/v2/hook/legacy"
+	if err := saveConfig(c); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := loadConfig()
+	if err != nil || validateOutput(loaded) != nil {
+		t.Fatalf("legacy config: %v", err)
+	}
+	c.Output = "json"
+	c.Webhook = "http://localhost:8080/private?token=secret"
+	if err := saveConfig(c); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(maskedWebhook(c.Webhook), "secret") {
+		t.Fatal("leaked query")
+	}
+	for _, endpoint := range []string{"file:///tmp/a", "https://user:secret@example.com/a", "https://example.com/a#secret", "http://"} {
+		c.Webhook = endpoint
+		if validateOutput(c) == nil {
+			t.Fatalf("accepted %s", endpoint)
+		}
+	}
+	c.Output = "unknown"
+	if validateOutput(c) == nil {
+		t.Fatal("unknown output accepted")
 	}
 }

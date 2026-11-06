@@ -1,3 +1,3 @@
-module github.com/guajun/flash-notify
+module github.com/guajun/blink2webhook
 
 go 1.24.0
