@@ -40,7 +40,7 @@ Webhook 是发送凭据，请仅保存在本机。配置文件保存明文 URL�
 | `flash-notify restart` | 重启并重新读取配置 |
 | `flash-notify autostart on` | 开启当前用户登录自启 |
 | `flash-notify autostart off` | 关闭登录自启，不停止本次运行 |
-| `flash-notify config webhook` | 隐藏输入并替换唯一 Webhook；运行中自动重启 |
+| `flash-notify config webhook` | 隐藏输入并替换唯一 Webhook；下一次闪烁事件使用新地址，无需重启 |
 | `flash-notify config show` | 查看脱敏配置 |
 | `flash-notify test` | 发一条真实测试消息 |
 | `flash-notify status` | 查看 daemon、自启、最近捕获和投递情况 |

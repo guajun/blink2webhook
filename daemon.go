@@ -49,10 +49,14 @@ func runDaemon() error {
 	if err = validateWebhook(c.Webhook); err != nil {
 		return err
 	}
-	return runCapture(c, webhookClient())
+	return runCaptureReload(c, webhookClient(), loadConfig)
 }
 
 func runCapture(c Config, client *http.Client) error {
+	return runCaptureReload(c, client, nil)
+}
+
+func runCaptureReload(c Config, client *http.Client, reload func() (Config, error)) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	if sessionID() == 0 {
@@ -90,7 +94,7 @@ func runCapture(c Config, client *http.Client) error {
 	defer cancel()
 	var worker sync.WaitGroup
 	worker.Add(1)
-	go func() { defer worker.Done(); dispatch(ctx, c, events, client, logger, update) }()
+	go func() { defer worker.Done(); dispatch(ctx, c, events, client, logger, update, reload) }()
 	defer func() {
 		cancel()
 		worker.Wait()
@@ -161,7 +165,7 @@ func runCapture(c Config, client *http.Client) error {
 	return nil
 }
 
-func dispatch(ctx context.Context, c Config, events <-chan Event, client *http.Client, logger *log.Logger, update func(func(*State))) {
+func dispatch(ctx context.Context, c Config, events <-chan Event, client *http.Client, logger *log.Logger, update func(func(*State)), reload func() (Config, error)) {
 	d := Debouncer{Last: map[string]time.Time{}, Quiet: time.Duration(c.QuietSeconds) * time.Second}
 	for {
 		select {
@@ -169,6 +173,22 @@ func dispatch(ctx context.Context, c Config, events <-chan Event, client *http.C
 			return
 		case e := <-events:
 			update(func(s *State) { s.Captured++; s.LastCapture = &e })
+			if reload != nil {
+				latest, loadErr := reload()
+				if loadErr == nil {
+					loadErr = validateWebhook(latest.Webhook)
+				}
+				if loadErr != nil {
+					logger.Print("读取最新 Webhook 配置失败，本次不投递")
+					update(func(s *State) { s.LastError = "读取最新 Webhook 配置失败" })
+					continue
+				}
+				if latest.Webhook != c.Webhook {
+					c.Webhook = latest.Webhook
+					d.Last = map[string]time.Time{}
+					logger.Print("已应用新的 Webhook 配置")
+				}
+			}
 			if !d.Accept(e) {
 				continue
 			}

@@ -110,9 +110,7 @@ func configure(args []string) error {
 		return err
 	}
 	fmt.Println("Webhook 已保存：", maskedWebhook(c.Webhook))
-	if daemonWindow() != 0 {
-		return restartDaemon()
-	}
+	fmt.Println("运行中的 daemon 将在下一次闪烁事件使用新地址；旧版本请先更新并重启。")
 	return nil
 }
 
