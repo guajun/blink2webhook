@@ -24,6 +24,7 @@ type State struct {
 	Session      uint32    `json:"session"`
 	Started      time.Time `json:"started"`
 	CaptureReady bool      `json:"capture_ready"`
+	WebhookHash  string    `json:"webhook_hash,omitempty"`
 	LastCapture  *Event    `json:"last_capture,omitempty"`
 	LastAccepted string    `json:"last_webhook_accepted,omitempty"`
 	LastError    string    `json:"last_error,omitempty"`
@@ -79,7 +80,7 @@ func runCaptureReload(c Config, client *http.Client, reload func() (Config, erro
 	}
 	defer file.Close()
 	logger := log.New(file, "", log.LstdFlags)
-	state := State{PID: os.Getpid(), Session: sessionID(), Started: time.Now()}
+	state := State{PID: os.Getpid(), Session: sessionID(), Started: time.Now(), WebhookHash: webhookHash(c.Webhook)}
 	var stateMu sync.Mutex
 	update := func(change func(*State)) {
 		stateMu.Lock()
@@ -93,10 +94,37 @@ func runCaptureReload(c Config, client *http.Client, reload func() (Config, erro
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var worker sync.WaitGroup
+	reloadRequests := make(chan struct{}, 1)
+	var reloadEvent uintptr
+	if reload != nil {
+		reloadEvent, _, _ = kernel32.NewProc("CreateEventW").Call(0, 0, 0, uintptr(unsafe.Pointer(wide(reloadEventName()))))
+		if reloadEvent == 0 {
+			return errors.New("创建配置通知事件失败")
+		}
+		defer kernel32.NewProc("CloseHandle").Call(reloadEvent)
+		worker.Add(1)
+		go func() {
+			defer worker.Done()
+			for {
+				r, _, _ := kernel32.NewProc("WaitForSingleObject").Call(reloadEvent, 0xffffffff)
+				if r != 0 || ctx.Err() != nil {
+					return
+				}
+				select {
+				case reloadRequests <- struct{}{}:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+	}
 	worker.Add(1)
-	go func() { defer worker.Done(); dispatch(ctx, c, events, client, logger, update, reload) }()
+	go func() { defer worker.Done(); dispatch(ctx, c, events, client, logger, update, reload, reloadRequests) }()
 	defer func() {
 		cancel()
+		if reloadEvent != 0 {
+			kernel32.NewProc("SetEvent").Call(reloadEvent)
+		}
 		worker.Wait()
 		update(func(s *State) { s.CaptureReady = false })
 		logger.Print("daemon 已退出")
@@ -165,21 +193,20 @@ func runCaptureReload(c Config, client *http.Client, reload func() (Config, erro
 	return nil
 }
 
-func dispatch(ctx context.Context, c Config, events <-chan Event, client *http.Client, logger *log.Logger, update func(func(*State)), reload func() (Config, error)) {
+func dispatch(ctx context.Context, c Config, events <-chan Event, client *http.Client, logger *log.Logger, update func(func(*State)), reload func() (Config, error), reloadRequests <-chan struct{}) {
 	d := Debouncer{Last: map[string]time.Time{}, Quiet: time.Duration(c.QuietSeconds) * time.Second}
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case e := <-events:
-			update(func(s *State) { s.Captured++; s.LastCapture = &e })
+		case <-reloadRequests:
 			if reload != nil {
 				latest, loadErr := reload()
 				if loadErr == nil {
 					loadErr = validateWebhook(latest.Webhook)
 				}
 				if loadErr != nil {
-					logger.Print("读取最新 Webhook 配置失败，本次不投递")
+					logger.Print("配置更新失败，保留原运行配置；请修复后重新执行 config 或 restart")
 					update(func(s *State) { s.LastError = "读取最新 Webhook 配置失败" })
 					continue
 				}
@@ -188,7 +215,10 @@ func dispatch(ctx context.Context, c Config, events <-chan Event, client *http.C
 					d.Last = map[string]time.Time{}
 					logger.Print("已应用新的 Webhook 配置")
 				}
+				update(func(s *State) { s.WebhookHash = webhookHash(c.Webhook); s.LastError = "" })
 			}
+		case e := <-events:
+			update(func(s *State) { s.Captured++; s.LastCapture = &e })
 			if !d.Accept(e) {
 				continue
 			}

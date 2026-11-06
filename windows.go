@@ -274,6 +274,10 @@ func diagnose(strict bool) error {
 	if err == nil {
 		b, _ := json.MarshalIndent(s, "", "  ")
 		fmt.Println("最近运行状态：\n" + string(b))
+		if daemonWindow() != 0 && s.WebhookHash != webhookHash(c.Webhook) {
+			fmt.Println("运行配置与磁盘配置不一致：手动改文件后请执行 restart；旧版本请先更新。")
+			healthy = false
+		}
 		if daemonWindow() != 0 && !s.CaptureReady {
 			healthy = false
 		}

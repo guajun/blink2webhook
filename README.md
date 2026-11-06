@@ -40,7 +40,7 @@ Webhook 是发送凭据，请仅保存在本机。配置文件保存明文 URL�
 | `flash-notify restart` | 重启并重新读取配置 |
 | `flash-notify autostart on` | 开启当前用户登录自启 |
 | `flash-notify autostart off` | 关闭登录自启，不停止本次运行 |
-| `flash-notify config webhook` | 隐藏输入并替换唯一 Webhook；下一次闪烁事件使用新地址，无需重启 |
+| `flash-notify config webhook` | 隐藏输入并替换唯一 Webhook；保存并通知 daemon 更新内存配置，无需重启 |
 | `flash-notify config show` | 查看脱敏配置 |
 | `flash-notify test` | 发一条真实测试消息 |
 | `flash-notify status` | 查看 daemon、自启、最近捕获和投递情况 |
@@ -48,6 +48,8 @@ Webhook 是发送凭据，请仅保存在本机。配置文件保存明文 URL�
 | `flash-notify version` | 查看版本 |
 
 自动化配置支持将 URL 从标准输入传给 `flash-notify config webhook --stdin`，不接受 URL 命令行参数，避免写入命令历史。单个用户会话运行一个 daemon，配置单个 Webhook。`FLASH_NOTIFY_HOME` 可覆盖数据目录用于开发测试，普通用户无需设置。
+
+配置通过两种方式生效：`config webhook` 保存文件并通知 daemon 更新内存中的 Webhook，收到确认后返回成功；直接修改 `config.json` 后，执行 `restart` 加载全部配置。平时的闪烁事件只使用内存配置，不读取配置文件，也不监测文件变更。已在进行的投递不改目的地；daemon 繁忙时配置命令可能提示尚未确认，待投递结束后应用。首次升级到此行为需要重启一次旧 daemon。
 
 `doctor` / `status` 会按配置的进程名列出当前桌面会话中已匹配的进程数量与 PID，并区分未匹配、只在其他会话运行和无法查询会话。QQNT 对应 `QQ.exe`，微信通常对应 `Weixin.exe` 或 `WeChat.exe`，命中其中一种即可；未启动应用是提示信息，不会单独导致诊断失败。进程匹配只能确认应用已启动，能否捕获仍需实际触发任务栏闪烁。
 
