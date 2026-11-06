@@ -35,6 +35,14 @@ irm https://guajun.github.io/flash-notify/install.ps1 | iex
 
 Webhook 是发送凭据，请仅保存在本机。配置文件保存明文 URL；CLI、诊断和日志不展示完整 URL。不要提交真实配置、日志或 Webhook。发送到飞书 / Lark 的信息只有设备名、应用名和时间。
 
+通知将应用名放在第一行，方便桌面横幅预览识别：
+
+```text
+【微信】请求注意
+设备：home-pc
+2026-11-06 12:00:00 · 电脑闪烁提醒
+```
+
 ## CLI
 
 | 命令 | 行为 |

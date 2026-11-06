@@ -10,6 +10,19 @@ import (
 	"time"
 )
 
+func TestNotificationPreviewStartsWithApp(t *testing.T) {
+	for process, label := range map[string]string{"QQ.exe": "QQNT", "Weixin.exe": "微信", "WeChat.exe": "微信"} {
+		text := eventText(Config{Device: strings.Repeat("long-device-name", 20)}, Event{App: process, Time: time.Now()})
+		first := strings.SplitN(text, "\n", 2)[0]
+		if first != "【"+label+"】请求注意" {
+			t.Fatalf("app missing from first preview line: %s", first)
+		}
+		if !strings.Contains(text, "电脑闪烁提醒") {
+			t.Fatal("existing keyword missing")
+		}
+	}
+}
+
 func TestWebhookProtocol(t *testing.T) {
 	cases := []struct {
 		name, reply    string

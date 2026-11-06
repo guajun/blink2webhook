@@ -90,5 +90,5 @@ func appLabel(process string) string {
 }
 
 func eventText(c Config, e Event) string {
-	return fmt.Sprintf("电脑闪烁提醒\n设备：%s\n应用：%s\n时间：%s\n检测到应用请求注意，请查看原应用。", c.Device, appLabel(e.App), e.Time.Format("2006-01-02 15:04:05"))
+	return fmt.Sprintf("【%s】请求注意\n设备：%s\n%s · 电脑闪烁提醒", appLabel(e.App), c.Device, e.Time.Format("2006-01-02 15:04:05"))
 }
