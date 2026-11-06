@@ -96,7 +96,7 @@ func startDaemon() error {
 		return nil
 	}
 	if sessionID() == 0 {
-		return errors.New("请在已登录的 Windows 桌面终端启动；SSH / Session 0 无法捕获桌面闪烁")
+		return errors.New("SSH / Session 0 可安装和配置；启动监测请在已登录的桌面终端运行 start，或等待登录自启")
 	}
 	c, err := loadConfig()
 	if err != nil {

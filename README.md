@@ -16,9 +16,13 @@
 irm https://guajun.github.io/flash-notify/install.ps1 | iex
 ```
 
-要求：Windows 10 / 11 amd64、PowerShell 5.1+，在用户已登录的桌面终端操作，不使用管理员权限。安装时会隐藏输入 Webhook URL。默认开启本次监测和用户登录自启；重复运行可更新，留空保留已有 Webhook。
+要求：Windows 10 / 11 amd64、PowerShell 5.1+，桌面安装无需管理员权限；SSH 也可完成安装和更新，但监测需在用户桌面会话启动。安装时会隐藏输入 Webhook URL。默认开启本次监测和用户登录自启；重复运行可更新，留空保留已有 Webhook。
 
 程序装到 `%LOCALAPPDATA%\FlashNotify\bin`，配置和日志在 `%LOCALAPPDATA%\FlashNotify`。安装器下载 Release 并检查 SHA-256；已发布二进制未进行 Authenticode 签名。
+
+## SSH 安装
+
+可以在 SSH 的 PowerShell 中执行同一安装命令，配置、下载、替换程序和登录自启均可完成。升级会停止同一路径的旧 daemon。SSH 安装不会在 Session 0 启动监测；完成后请在电脑已登录的桌面终端执行一次 `flash-notify start`，或在下次用户登录时自动启动。SSH 注册交互式计划任务或跨会话启动可能受 Windows 权限限制，因此安装器不依赖这些权限。
 
 ## 配置飞书 / Lark
 

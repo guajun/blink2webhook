@@ -6,9 +6,7 @@ param(
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 if (-not [Environment]::Is64BitOperatingSystem) { throw 'Flash Notify requires Windows amd64.' }
-if ([Diagnostics.Process]::GetCurrentProcess().SessionId -eq 0) {
-    throw 'Run this installer from your logged-in Windows desktop, not SSH / Session 0.'
-}
+$fromSSH = [Diagnostics.Process]::GetCurrentProcess().SessionId -eq 0
 $repo = 'guajun/flash-notify'
 $installDir = Join-Path $env:LOCALAPPDATA 'FlashNotify\bin'
 $exe = Join-Path $installDir 'flash-notify.exe'
@@ -50,7 +48,16 @@ try {
     if (Test-Path -LiteralPath $exe) {
         & $exe stop
         if ($LASTEXITCODE -ne 0) { throw 'Stop the existing daemon before upgrading.' }
+        if ($fromSSH) {
+            # Older versions cannot see another session's hidden daemon window.
+            Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -eq $exe } | ForEach-Object {
+                Stop-Process -Id $_.ProcessId -ErrorAction Stop
+            }
+            Start-Sleep -Milliseconds 300
+        }
     }
+    $stateFile = Join-Path $env:LOCALAPPDATA 'FlashNotify\state.json'
+    if (Test-Path -LiteralPath $stateFile) { Remove-Item -LiteralPath $stateFile -Force }
     Copy-Item -LiteralPath (Join-Path $tempDir 'flash-notify.exe') -Destination $exe -Force
     if ($webhook) {
         $webhook | & $exe config webhook --stdin
@@ -67,12 +74,18 @@ try {
         & $exe autostart on
         if ($LASTEXITCODE -ne 0) { throw 'Could not enable login startup.' }
     }
-    if (-not $NoStart) {
+    if (-not $NoStart -and -not $fromSSH) {
         & $exe start
-        if ($LASTEXITCODE -ne 0) { throw 'Daemon failed to start. Run flash-notify doctor.' }
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Daemon failed to start. Run flash-notify doctor.'
+        }
     }
     Write-Host 'Installed. Commands: flash-notify test / doctor / stop / autostart off' -ForegroundColor Green
     Write-Host "Program: $exe"
+    if ($fromSSH -and -not $NoStart) {
+        Write-Host 'SSH installation is complete. Monitoring is not running in Session 0.' -ForegroundColor Yellow
+        Write-Host 'Run flash-notify start once from the logged-in Windows desktop, or sign out and sign in for login startup.'
+    }
     Write-Host 'A new terminal may be required for the PATH change.'
 }
 finally {
